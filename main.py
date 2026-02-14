@@ -141,6 +141,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
+    username: str | None = None
 
 
 @app.post("/rag/query")
@@ -149,7 +150,21 @@ async def query(req: QueryRequest):
         store = QdrantStorage()
 
         query_vector = embed_texts([req.question])[0]
-        found = store.search(query_vector, req.top_k)
+        
+        # Filter by username if provided
+        query_filter = None
+        if req.username:
+            from qdrant_client.models import Filter, FieldCondition, MatchText
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="source",
+                        match=MatchText(text=f"{req.username}/")
+                    )
+                ]
+            )
+        
+        found = store.search(query_vector, req.top_k, query_filter)
 
         if not found["contexts"]:
             return {
