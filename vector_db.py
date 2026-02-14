@@ -32,10 +32,11 @@ class QdrantStorage:
         ]
         self.client.upsert(self.collection, points=points)
 
-    def search(self, query_vector, top_k: int = 5):
+    def search(self, query_vector, top_k: int = 5, query_filter=None):
         results = self.client.search(
             collection_name=self.collection,
             query_vector=query_vector,
+            query_filter=query_filter,
             with_payload=True,
             limit=top_k,
         )
