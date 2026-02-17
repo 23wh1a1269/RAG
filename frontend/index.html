@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG PDF Chat - Login</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="theme-toggle" id="themeToggle">🌓</div>
+    
+    <div class="container">
+        <div class="auth-card">
+            <h1 class="title">🚀 RAG PDF Chat</h1>
+            <p class="subtitle">Chat with your PDFs using intelligent retrieval‑augmented AI</p>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('login')">Login</button>
+                <button class="tab" onclick="showTab('signup')">Sign Up</button>
+                <button class="tab" onclick="showTab('forgot')">Forgot Password</button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" class="form active">
+                <div class="form-group">
+                    <input type="text" id="loginUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+                <div id="loginMessage" class="message"></div>
+            </form>
+            
+            <!-- Signup Form -->
+            <form id="signupForm" class="form">
+                <div class="form-group">
+                    <input type="text" id="signupUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="signupEmail" placeholder="Email" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="signupPassword" placeholder="Password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="signupPassword2" placeholder="Confirm Password" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+                <div id="signupMessage" class="message"></div>
+            </form>
+            
+            <!-- Forgot Password Form -->
+            <form id="forgotForm" class="form">
+                <div class="form-group">
+                    <input type="email" id="forgotEmail" placeholder="Email" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                <div id="forgotMessage" class="message"></div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="js/auth.js"></script>
+</body>
+</html>

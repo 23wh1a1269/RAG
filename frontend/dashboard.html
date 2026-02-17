@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG PDF Chat - Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="theme-toggle" id="themeToggle">🌓</div>
+    
+    <div class="dashboard">
+        <div class="header">
+            <div class="user-info">
+                <div class="welcome">Welcome back</div>
+                <div class="username" id="username"></div>
+            </div>
+            <div class="quota-box">
+                <div class="quota-label">Queries left</div>
+                <div class="quota-value" id="queryQuota">0</div>
+            </div>
+            <button class="btn btn-logout" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showSection('chat')">💬 Chat</button>
+            <button class="tab" onclick="showSection('documents')">📄 Documents</button>
+            <button class="tab" onclick="showSection('history')">🕒 History</button>
+            <button class="tab" onclick="showSection('profile')">👤 Profile</button>
+        </div>
+        
+        <!-- Chat Section -->
+        <div id="chatSection" class="section active">
+            <div class="grid">
+                <div class="card">
+                    <h3>Upload PDFs</h3>
+                    <input type="file" id="pdfFiles" multiple accept=".pdf" class="file-input">
+                    <button class="btn btn-primary" onclick="uploadFiles()">Upload Files</button>
+                    <div id="uploadMessage" class="message"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>Ask your documents</h3>
+                    <div class="form-group">
+                        <label style="display:block;margin-bottom:10px">
+                            <strong>Query from:</strong>
+                            <select id="docFilter" style="width:100%;padding:8px;margin-top:5px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text)">
+                                <option value="all">All Documents</option>
+                                <option value="selected">Selected Documents</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="docSelectionArea" style="display:none;margin-bottom:15px;max-height:150px;overflow-y:auto;padding:10px;background:rgba(255,255,255,0.03);border-radius:6px">
+                        <!-- Document checkboxes will be populated here -->
+                    </div>
+                    <textarea id="question" placeholder="Ask anything from your PDFs..." rows="5"></textarea>
+                    <label>Context chunks: <input type="range" id="topK" min="1" max="10" value="5"> <span id="topKValue">5</span></label>
+                    <button class="btn btn-primary" onclick="askQuestion()">Ask AI</button>
+                    <div id="answerBox" class="answer-box"></div>
+                    <div id="sourcesBox" class="sources-box"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Documents Section -->
+        <div id="documentsSection" class="section">
+            <div class="card">
+                <h3>Your Documents</h3>
+                <div id="documentsList"></div>
+            </div>
+        </div>
+        
+        <!-- History Section -->
+        <div id="historySection" class="section">
+            <div class="card">
+                <h3>Conversation History</h3>
+                <div id="historyList"></div>
+            </div>
+        </div>
+        
+        <!-- Profile Section -->
+        <div id="profileSection" class="section">
+            <div class="grid">
+                <div class="card">
+                    <h3>Profile Information</h3>
+                    <div class="profile-info">
+                        <div class="profile-label">USERNAME</div>
+                        <div class="profile-value" id="profileUsername"></div>
+                        <div class="profile-label">EMAIL</div>
+                        <div class="profile-value" id="profileEmail"></div>
+                        <div class="profile-label">MEMBER SINCE</div>
+                        <div class="profile-value" id="profileCreated"></div>
+                        <div class="profile-label">QUERY QUOTA</div>
+                        <div class="profile-value" id="profileQuota"></div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Update Profile</h3>
+                    <form id="updateProfileForm">
+                        <div class="form-group">
+                            <input type="text" id="newUsername" placeholder="New Username">
+                        </div>
+                        <div class="form-group">
+                            <input type="email" id="newEmail" placeholder="New Email">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Profile</button>
+                        <div id="profileMessage" class="message"></div>
+                    </form>
+                    
+                    <h3 style="margin-top: 30px">Change Password</h3>
+                    <form id="changePasswordForm">
+                        <div class="form-group">
+                            <input type="password" id="oldPassword" placeholder="Current Password" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="password" id="newPassword" placeholder="New Password" required minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <input type="password" id="newPassword2" placeholder="Confirm New Password" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Change Password</button>
+                        <div id="passwordMessage" class="message"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
