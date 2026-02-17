@@ -16,7 +16,22 @@ wheels/
 users.json
 *.log
 qdrant_storage/
+cache/
 
 # IDE
 .idea/
 .python-version
+
+# Backups
+*_backup.py
+migrate_*.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+cache/
+*_backup.py
+migrate_*.py
+.DS_Store
+Thumbs.db
