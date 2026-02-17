@@ -50,6 +50,19 @@ else
     echo "   Response: $RESPONSE"
 fi
 
+# Test 5: Test RAG query endpoint
+echo "5. Testing RAG query endpoint..."
+QUERY_RESPONSE=$(curl -s -X POST http://localhost:8000/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"test", "username":"testuser123"}')
+
+if echo "$QUERY_RESPONSE" | grep -q "answer"; then
+    echo "   ✅ RAG query endpoint works"
+else
+    echo "   ❌ RAG query endpoint failed"
+    echo "   Response: $QUERY_RESPONSE"
+fi
+
 echo ""
 echo "✅ All tests passed!"
 echo ""
