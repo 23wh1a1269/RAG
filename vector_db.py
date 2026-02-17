@@ -32,22 +32,28 @@ class QdrantStorage:
         ]
         self.client.upsert(self.collection, points=points)
 
-    def search(self, query_vector, top_k: int = 5, query_filter=None):
-        results = self.client.search(
-            collection_name=self.collection,
-            query_vector=query_vector,
-            query_filter=query_filter,
-            with_payload=True,
-            limit=top_k,
-        )
+    def search(self, query_vector, top_k: int = 5, query_filter=None, score_threshold: float = 0.5):
+        """Search with score threshold for better relevance."""
+        kwargs = {
+            "collection_name": self.collection,
+            "query_vector": query_vector,
+            "with_payload": True,
+            "limit": top_k,
+            "score_threshold": score_threshold,
+        }
+        if query_filter:
+            kwargs["query_filter"] = query_filter
+            
+        results = self.client.search(**kwargs)
 
-        contexts, sources = [], set()
+        contexts, sources, scores = [], set(), []
 
         for r in results:
             payload = r.payload or {}
             if "text" in payload:
                 contexts.append(payload["text"])
+                scores.append(r.score)
             if "source" in payload:
                 sources.add(payload["source"])
 
-        return {"contexts": contexts, "sources": list(sources)}
+        return {"contexts": contexts, "sources": list(sources), "scores": scores}
