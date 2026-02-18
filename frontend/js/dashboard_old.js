@@ -1,8 +1,7 @@
 const API_URL = 'http://localhost:8000';
 const username = localStorage.getItem('username');
-const token = localStorage.getItem('token');
 
-if (!username || !token) {
+if (!username) {
     window.location.href = 'index.html';
 }
 
@@ -46,18 +45,16 @@ document.getElementById('docFilter').addEventListener('change', (e) => {
 // Populate document checkboxes
 async function populateDocumentCheckboxes() {
     try {
-        const res = await fetch(`${API_URL}/documents`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_URL}/documents/${username}`);
         const data = await res.json();
         const area = document.getElementById('docSelectionArea');
         
-        if (!data.data || !data.data.documents || !data.data.documents.length) {
+        if (!data.documents || !data.documents.length) {
             area.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No documents uploaded yet</p>';
             return;
         }
         
-        area.innerHTML = data.data.documents.map(doc => `
+        area.innerHTML = data.documents.map(doc => `
             <label style="display:block;margin:5px 0;cursor:pointer">
                 <input type="checkbox" class="doc-checkbox" value="${doc}" checked style="margin-right:8px">
                 <span style="font-size:14px">${doc}</span>
@@ -83,7 +80,6 @@ function showSection(section) {
 
 function logout() {
     localStorage.removeItem('username');
-    localStorage.removeItem('token');
     window.location.href = 'index.html';
 }
 
@@ -106,15 +102,14 @@ async function uploadFiles() {
     for (let file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('username', username);
         
         try {
             const res = await fetch(`${API_URL}/rag/upload`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            const data = await res.json();
-            if (data.success) success++;
+            if (res.ok) success++;
         } catch (err) {
             console.error(err);
         }
@@ -156,23 +151,21 @@ async function askQuestion() {
         const payload = {
             question,
             top_k: topK,
+            username,
             selected_documents: selectedDocs
         };
         
         const res = await fetch(`${API_URL}/rag/query`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         
         const data = await res.json();
         
-        if (data.success && data.data && data.data.answer) {
+        if (data.answer) {
             // Format answer with basic markdown-style rendering
-            let formatted = data.data.answer
+            let formatted = data.answer
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
                 .replace(/\n\n/g, '</p><p>')  // Paragraphs
                 .replace(/\n- /g, '<br>• ')  // Bullet points
@@ -180,13 +173,13 @@ async function askQuestion() {
             
             answerBox.innerHTML = '<p>' + formatted + '</p>';
             
-            if (data.data.sources && data.data.sources.length) {
+            if (data.sources && data.sources.length) {
                 sourcesBox.innerHTML = '<strong>Sources:</strong><br>' + 
-                    data.data.sources.map(s => `• ${s}`).join('<br>');
+                    data.sources.map(s => `• ${s}`).join('<br>');
                 sourcesBox.classList.add('show');
             }
         } else {
-            answerBox.innerHTML = '<em>' + (data.message || 'No answer returned') + '</em>';
+            answerBox.innerHTML = '<em>No answer returned</em>';
         }
     } catch (err) {
         answerBox.innerHTML = '<span style="color:#ff3b30">Error: ' + err.message + '</span>';
@@ -196,18 +189,16 @@ async function askQuestion() {
 // Load documents
 async function loadDocuments() {
     try {
-        const res = await fetch(`${API_URL}/documents`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_URL}/documents/${username}`);
         const data = await res.json();
         const list = document.getElementById('documentsList');
         
-        if (!data.data || !data.data.documents || !data.data.documents.length) {
+        if (!data.documents || !data.documents.length) {
             list.innerHTML = '<p style="color: var(--text-muted)">No documents uploaded yet</p>';
             return;
         }
         
-        list.innerHTML = data.data.documents.map(doc => `
+        list.innerHTML = data.documents.map(doc => `
             <div class="doc-item">
                 <span>📄 ${doc}</span>
                 <button onclick="deleteDocument('${doc}')">Delete</button>
@@ -223,10 +214,7 @@ async function deleteDocument(doc) {
     if (!confirm('Delete this document?')) return;
     
     try {
-        await fetch(`${API_URL}/documents/${doc}`, { 
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        await fetch(`${API_URL}/documents/${username}/${doc}`, { method: 'DELETE' });
         loadDocuments();
     } catch (err) {
         console.error(err);
@@ -236,18 +224,16 @@ async function deleteDocument(doc) {
 // Load history
 async function loadHistory() {
     try {
-        const res = await fetch(`${API_URL}/history`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_URL}/history/${username}`);
         const data = await res.json();
         const list = document.getElementById('historyList');
         
-        if (!data.data || !data.data.history || !data.data.history.length) {
+        if (!data.history || !data.history.length) {
             list.innerHTML = '<p style="color: var(--text-muted)">No conversations yet</p>';
             return;
         }
         
-        list.innerHTML = data.data.history.slice(-20).reverse().map((chat, i) => `
+        list.innerHTML = data.history.slice(-20).reverse().map((chat, i) => `
             <div class="history-item" onclick="this.classList.toggle('expanded')">
                 <div class="history-question">${chat.question.substring(0, 60)}...</div>
                 <div class="history-answer"><strong>Answer:</strong> ${chat.answer}</div>
@@ -261,19 +247,15 @@ async function loadHistory() {
 // Load profile
 async function loadProfile() {
     try {
-        const res = await fetch(`${API_URL}/profile`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_URL}/profile/${username}`);
         const data = await res.json();
         
-        if (data.success && data.data) {
-            document.getElementById('profileUsername').textContent = data.data.username;
-            document.getElementById('profileEmail').textContent = data.data.email;
-            document.getElementById('profileCreated').textContent = data.data.created_at?.substring(0, 10) || '';
-            
-            document.getElementById('newUsername').value = data.data.username;
-            document.getElementById('newEmail').value = data.data.email;
-        }
+        document.getElementById('profileUsername').textContent = data.username;
+        document.getElementById('profileEmail').textContent = data.email;
+        document.getElementById('profileCreated').textContent = data.created_at?.substring(0, 10) || '';
+        
+        document.getElementById('newUsername').value = data.username;
+        document.getElementById('newEmail').value = data.email;
     } catch (err) {
         console.error(err);
     }
@@ -287,12 +269,9 @@ document.getElementById('updateProfileForm').addEventListener('submit', async (e
     const msg = document.getElementById('profileMessage');
     
     try {
-        const res = await fetch(`${API_URL}/profile`, {
+        const res = await fetch(`${API_URL}/profile/${username}`, {
             method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ new_username: newUsername, new_email: newEmail })
         });
         
@@ -300,9 +279,9 @@ document.getElementById('updateProfileForm').addEventListener('submit', async (e
         
         if (data.success) {
             msg.className = 'message success';
-            msg.textContent = 'Profile updated!';
-            if (data.data && data.data.username !== username) {
-                localStorage.setItem('username', data.data.username);
+            msg.textContent = 'Profile updated! Email notification sent.';
+            if (data.username !== username) {
+                localStorage.setItem('username', data.username);
                 setTimeout(() => location.reload(), 1500);
             }
         } else {
@@ -332,18 +311,15 @@ document.getElementById('changePasswordForm').addEventListener('submit', async (
     try {
         const res = await fetch(`${API_URL}/auth/change-password`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, old_password: oldPassword, new_password: newPassword })
         });
         
         const data = await res.json();
         
         if (data.success) {
             msg.className = 'message success';
-            msg.textContent = 'Password changed!';
+            msg.textContent = 'Password changed! Email notification sent.';
             e.target.reset();
         } else {
             msg.className = 'message error';

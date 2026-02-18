@@ -30,12 +30,17 @@ CACHE_DIR = "cache"
 
 # RAG Parameters
 DEFAULT_QUERY_QUOTA = 50
-DEFAULT_TOP_K = 3
+DEFAULT_TOP_K = 5  # Increased for better context
 EMBEDDING_DIM = 384
 COLLECTION_NAME = "docs"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
-SCORE_THRESHOLD = 0.4
+SCORE_THRESHOLD = 0.3  # Lowered for broader matches
+
+# Context confidence thresholds
+MIN_CONTEXT_CHUNKS = 1  # Minimum chunks to consider context valid
+MIN_SIMILARITY_SCORE = 0.35  # Minimum score for confident context
+FALLBACK_THRESHOLD = 0.4  # If best score below this, use general knowledge
 
 # CORS
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")

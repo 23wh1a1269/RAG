@@ -40,14 +40,15 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         
         const data = await res.json();
         
-        if (data.success) {
+        if (data.success && data.data && data.data.token) {
             localStorage.setItem('username', username);
+            localStorage.setItem('token', data.data.token);
             msg.className = 'message success';
             msg.textContent = 'Login successful! Redirecting...';
             setTimeout(() => window.location.href = 'dashboard.html', 1000);
         } else {
             msg.className = 'message error';
-            msg.textContent = data.message;
+            msg.textContent = data.message || 'Login failed';
         }
     } catch (err) {
         msg.className = 'message error';
@@ -81,39 +82,11 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
         
         if (data.success) {
             msg.className = 'message success';
-            msg.textContent = 'Account created! Check your email. Redirecting to login...';
+            msg.textContent = 'Account created! Redirecting to login...';
             setTimeout(() => {
                 document.querySelector('.tab').click();
                 document.getElementById('loginUsername').value = username;
             }, 2000);
-        } else {
-            msg.className = 'message error';
-            msg.textContent = data.message;
-        }
-    } catch (err) {
-        msg.className = 'message error';
-        msg.textContent = 'Connection error';
-    }
-});
-
-// Forgot Password
-document.getElementById('forgotForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('forgotEmail').value;
-    const msg = document.getElementById('forgotMessage');
-    
-    try {
-        const res = await fetch(`${API_URL}/auth/forgot-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-            msg.className = 'message success';
-            msg.textContent = 'Reset link sent to your email!';
         } else {
             msg.className = 'message error';
             msg.textContent = data.message;

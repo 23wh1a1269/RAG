@@ -9,11 +9,10 @@ from pydantic import BaseModel
 from groq import Groq
 
 from backend.config import *
-from backend.auth import signup, login, verify_token, get_user_profile, update_profile, change_password, request_reset, reset_password, decrement_quota
+from backend.auth import signup, login, verify_token, get_user_profile, update_profile, change_password, request_reset, reset_password
 from backend.email_service import send_welcome_email
 from backend.rag.data_loader import load_and_chunk_pdf, embed_texts
 from backend.rag.vector_db import QdrantStorage
-from backend.rag.prompts import SYSTEM_PROMPT, create_user_prompt, format_response
 from backend.rag.cache import get_cached, cache_response
 from backend.user.user_data import add_chat, get_chat_history, get_user_documents, delete_user_document
 
@@ -158,24 +157,46 @@ async def get_history_endpoint(username: str = Depends(verify_token)):
 @app.post("/rag/upload")
 async def upload_endpoint(file: UploadFile = File(...), username: str = Depends(verify_token)):
     try:
+        print(f"\n[UPLOAD] User: {username}, File: {file.filename}")
+        
+        # Validate PDF
+        if not file.filename.lower().endswith('.pdf'):
+            return {"success": False, "message": "Only PDF files allowed"}
+        
         upload_path = Path(UPLOADS_DIR) / username
         upload_path.mkdir(parents=True, exist_ok=True)
         file_path = upload_path / file.filename
         
+        # Save file
         with open(file_path, "wb") as f:
-            f.write(await file.read())
+            content = await file.read()
+            f.write(content)
+        print(f"[UPLOAD] Saved to: {file_path}")
         
+        # Process PDF
         chunks = load_and_chunk_pdf(str(file_path.resolve()))
-        vectors = embed_texts(chunks)
+        print(f"[UPLOAD] Chunked into {len(chunks)} pieces")
         
+        if not chunks:
+            return {"success": False, "message": "PDF appears to be empty"}
+        
+        # Generate embeddings
+        vectors = embed_texts(chunks)
+        print(f"[UPLOAD] Generated {len(vectors)} embeddings")
+        
+        # Store in Qdrant
         source_id = f"{username}/{file.filename}"
         ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, f"{source_id}:{i}")) for i in range(len(chunks))]
         payloads = [{"text": chunk, "source": source_id} for chunk in chunks]
         
         QdrantStorage().upsert(ids, vectors, payloads)
+        print(f"[UPLOAD] Stored in Qdrant with source: {source_id}")
         
         return {"success": True, "message": "Upload successful", "data": {"chunks": len(chunks)}}
     except Exception as e:
+        print(f"[UPLOAD ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "message": f"Upload failed: {str(e)}"}
 
 # ========== RAG QUERY ==========
@@ -183,33 +204,121 @@ async def upload_endpoint(file: UploadFile = File(...), username: str = Depends(
 @app.post("/rag/query")
 async def query_endpoint(req: QueryRequest, username: str = Depends(verify_token)):
     try:
-        print(f"\n[DEBUG] Query from {username}: {req.question}")
-        print(f"[DEBUG] Selected docs: {req.selected_documents}")
+        from backend.rag.prompts import (
+            DOCUMENT_SYSTEM_PROMPT, GENERAL_SYSTEM_PROMPT, CONVERSATIONAL_PROMPT, SUMMARY_SYSTEM_PROMPT,
+            create_document_prompt, create_general_prompt, create_conversational_prompt, create_summary_prompt,
+            format_response, is_conversational, is_summary_request
+        )
+        from backend.config import MIN_CONTEXT_CHUNKS, FALLBACK_THRESHOLD
         
+        print(f"\n[QUERY] User: {username}, Question: {req.question}")
+        
+        # Handle conversational queries
+        if is_conversational(req.question):
+            print("[QUERY] Detected conversational query")
+            client = Groq(api_key=GROQ_API_KEY)
+            completion = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": CONVERSATIONAL_PROMPT},
+                    {"role": "user", "content": create_conversational_prompt(req.question)}
+                ],
+                temperature=0.3,
+                max_tokens=150
+            )
+            answer = format_response(completion.choices[0].message.content.strip())
+            response = {"answer": answer, "sources": [], "num_contexts": 0, "mode": "conversational"}
+            return {"success": True, "data": response}
+        
+        # Detect summary request BEFORE retrieval
+        if is_summary_request(req.question):
+            print("[QUERY] Detected FULL DOCUMENT SUMMARY request")
+            
+            # Get ALL chunks for user's documents (or selected documents)
+            store = QdrantStorage()
+            
+            # Retrieve many chunks (no semantic search, just get document content)
+            # Use a dummy vector to get all user's documents
+            from backend.rag.data_loader import get_model
+            dummy_query = "document content"
+            query_vector = get_model().encode([dummy_query], convert_to_numpy=True)[0].tolist()
+            
+            # Get up to 50 chunks (adjust based on token limits)
+            found = store.search(query_vector, top_k=50, score_threshold=0.0)  # No threshold, get all
+            
+            # Filter by username and selected documents
+            filtered_contexts, filtered_sources = [], []
+            for ctx, src in zip(found["contexts"], found["sources"]):
+                if not src.startswith(f"{username}/"):
+                    continue
+                if req.selected_documents:
+                    doc_name = src.split("/", 1)[1] if "/" in src else src
+                    if doc_name not in req.selected_documents:
+                        continue
+                filtered_contexts.append(ctx)
+                filtered_sources.append(src)
+            
+            print(f"[QUERY] SUMMARY MODE: Retrieved {len(filtered_contexts)} chunks")
+            
+            if not filtered_contexts:
+                # User has no documents uploaded
+                return {
+                    "success": True,
+                    "data": {
+                        "answer": "No documents have been uploaded yet. Please upload a PDF to get a summary.",
+                        "sources": [],
+                        "num_contexts": 0,
+                        "mode": "summary_no_docs"
+                    }
+                }
+            
+            # Combine chunks (token-safe: limit to ~3000 tokens = ~12000 chars)
+            combined_content = "\n\n".join(filtered_contexts[:30])  # ~30 chunks max
+            
+            client = Groq(api_key=GROQ_API_KEY)
+            completion = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user", "content": create_summary_prompt(combined_content)}
+                ],
+                temperature=0.2,
+                max_tokens=800
+            )
+            
+            answer = format_response(completion.choices[0].message.content.strip())
+            response = {
+                "answer": answer,
+                "sources": list(set(filtered_sources)),
+                "num_contexts": len(filtered_contexts),
+                "mode": "full_document_summary"
+            }
+            
+            # Cache and save
+            cache_response(req.question, username, req.selected_documents or [], response)
+            add_chat(username, req.question, answer, response["sources"])
+            
+            return {"success": True, "data": response}
+        
+        # Regular semantic search for specific questions
         # Check cache
         cached = get_cached(req.question, username, req.selected_documents or [])
         if cached:
-            print("[DEBUG] Returning cached response")
+            print("[QUERY] Returning cached response")
             return {"success": True, "data": cached}
         
         # Search vector DB
         store = QdrantStorage()
         query_vector = embed_texts([req.question])[0]
         
-        # Adaptive top_k
-        search_k = 10 if any(kw in req.question.lower() for kw in ["summarize", "summary", "overview"]) else req.top_k
-        found = store.search(query_vector, search_k)
+        # Use configured top_k
+        found = store.search(query_vector, req.top_k, score_threshold=0.25)
         
-        print(f"[DEBUG] Found {len(found['contexts'])} contexts from vector DB")
-        print(f"[DEBUG] Sources: {found['sources']}")
-
-        if not found["contexts"]:
-            response = {"answer": "No relevant context found.", "sources": [], "num_contexts": 0}
-            return {"success": True, "data": response}
+        print(f"[QUERY] Found {len(found['contexts'])} contexts, best score: {found.get('best_score', 0):.3f}")
 
         # Filter by username and selected documents
-        filtered_contexts, filtered_sources = [], []
-        for ctx, src in zip(found["contexts"], found["sources"]):
+        filtered_contexts, filtered_sources, filtered_scores = [], [], []
+        for i, (ctx, src) in enumerate(zip(found["contexts"], found["sources"])):
             if not src.startswith(f"{username}/"):
                 continue
             if req.selected_documents:
@@ -218,50 +327,76 @@ async def query_endpoint(req: QueryRequest, username: str = Depends(verify_token
                     continue
             filtered_contexts.append(ctx)
             filtered_sources.append(src)
+            if i < len(found.get("scores", [])):
+                filtered_scores.append(found["scores"][i])
         
-        print(f"[DEBUG] After filtering: {len(filtered_contexts)} contexts")
-        print(f"[DEBUG] Filtered sources: {filtered_sources}")
+        print(f"[QUERY] After filtering: {len(filtered_contexts)} contexts")
         
-        if not filtered_contexts:
-            response = {"answer": "No relevant context in selected documents.", "sources": [], "num_contexts": 0}
-            return {"success": True, "data": response}
-
-        # Generate answer
-        context_limit = 8 if search_k > 5 else 3
-        context_block = "\n\n".join(filtered_contexts[:context_limit])
-        
-        print(f"[DEBUG] Calling Groq AI with {len(filtered_contexts[:context_limit])} contexts")
+        # Determine if we have confident context
+        has_confident_context = (
+            len(filtered_contexts) >= MIN_CONTEXT_CHUNKS and
+            (filtered_scores and max(filtered_scores) >= FALLBACK_THRESHOLD)
+        )
         
         client = Groq(api_key=GROQ_API_KEY)
-        completion = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": create_user_prompt(context_block, req.question)}
-            ],
-            temperature=0.1,
-            max_tokens=512
-        )
-
-        answer = format_response(completion.choices[0].message.content.strip())
         
-        print(f"[DEBUG] Got answer: {answer[:100]}...")
+        if has_confident_context:
+            # Use document-based answering
+            print(f"[QUERY] Using DOCUMENT mode (score: {max(filtered_scores):.3f})")
+            context_limit = min(8, len(filtered_contexts))
+            context_block = "\n\n".join(filtered_contexts[:context_limit])
+            
+            completion = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": DOCUMENT_SYSTEM_PROMPT},
+                    {"role": "user", "content": create_document_prompt(context_block, req.question)}
+                ],
+                temperature=0.15,
+                max_tokens=600
+            )
+            
+            answer = format_response(completion.choices[0].message.content.strip())
+            response = {
+                "answer": answer,
+                "sources": list(set(filtered_sources[:context_limit])),
+                "num_contexts": context_limit,
+                "mode": "document",
+                "confidence": max(filtered_scores)
+            }
+            
+        else:
+            # Use general knowledge fallback ONLY when no chunks AND not summary request
+            print(f"[QUERY] Using GENERAL KNOWLEDGE mode (low/no context)")
+            completion = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": GENERAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": create_general_prompt(req.question)}
+                ],
+                temperature=0.2,
+                max_tokens=400
+            )
+            
+            answer = format_response(completion.choices[0].message.content.strip())
+            response = {
+                "answer": answer,
+                "sources": [],
+                "num_contexts": 0,
+                "mode": "general_knowledge",
+                "confidence": 0.0
+            }
         
-        response = {
-            "answer": answer,
-            "sources": filtered_sources,
-            "num_contexts": len(filtered_contexts)
-        }
+        print(f"[QUERY] Mode: {response['mode']}, Answer length: {len(answer)} chars")
         
         # Cache and save
         cache_response(req.question, username, req.selected_documents or [], response)
-        add_chat(username, req.question, answer, filtered_sources)
-        decrement_quota(username, "query_quota")
+        add_chat(username, req.question, answer, response.get("sources", []))
         
         return {"success": True, "data": response}
         
     except Exception as e:
-        print(f"[ERROR] Query failed: {str(e)}")
+        print(f"[QUERY ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
         return {"success": False, "message": f"Query failed: {str(e)}"}

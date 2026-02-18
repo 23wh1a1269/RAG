@@ -27,11 +27,17 @@ class QdrantStorage:
             score_threshold=score_threshold
         )
 
-        contexts, sources = [], set()
+        contexts, sources, scores = [], set(), []
         for r in results:
             if r.payload and "text" in r.payload:
                 contexts.append(r.payload["text"])
+                scores.append(r.score)
             if r.payload and "source" in r.payload:
                 sources.add(r.payload["source"])
 
-        return {"contexts": contexts, "sources": list(sources)}
+        return {
+            "contexts": contexts, 
+            "sources": list(sources),
+            "scores": scores,
+            "best_score": max(scores) if scores else 0.0
+        }
