@@ -3,54 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG PDF Chat - Login</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>RAG GPT - Login</title>
+    <link rel="stylesheet" href="css/auth.css">
 </head>
 <body>
-    <div class="theme-toggle" id="themeToggle">🌓</div>
+    <!-- Background -->
+    <div class="auth-background"></div>
     
-    <div class="container">
+    <!-- Back to Home -->
+    <a href="landing.html" class="back-home">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 10H5M5 10L10 15M5 10L10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Back to Home
+    </a>
+
+    <div class="auth-container">
         <div class="auth-card">
-            <h1 class="title">🚀 RAG PDF Chat</h1>
-            <p class="subtitle">Chat with your PDFs using intelligent retrieval‑augmented AI</p>
-            
-            <div class="tabs">
-                <button class="tab active" onclick="showTab('login')">Login</button>
-                <button class="tab" onclick="showTab('signup')">Sign Up</button>
+            <!-- Logo -->
+            <div class="auth-logo">
+                <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="url(#gradient)"/>
+                    <path d="M16 8L22 12V20L16 24L10 20V12L16 8Z" fill="white"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#667eea"/>
+                            <stop offset="100%" stop-color="#764ba2"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>RAG GPT</h1>
             </div>
-            
+
+            <!-- Tabs -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="signup">Sign Up</button>
+            </div>
+
             <!-- Login Form -->
-            <form id="loginForm" class="form active">
+            <form id="loginForm" class="auth-form active">
                 <div class="form-group">
-                    <input type="text" id="loginUsername" placeholder="Username" required>
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter your username" required>
                 </div>
                 <div class="form-group">
-                    <input type="password" id="loginPassword" placeholder="Password" required>
+                    <label for="loginPassword">Password</label>
+                    <div class="password-input">
+                        <input type="password" id="loginPassword" placeholder="Enter your password" required>
+                        <button type="button" class="toggle-password" onclick="togglePassword('loginPassword')">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 5C5 5 2 10 2 10s3 5 8 5 8-5 8-5-3-5-8-5z" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Login</button>
+                <button type="submit" class="btn-primary btn-full">
+                    <span>Login</span>
+                    <div class="btn-loader"></div>
+                </button>
                 <div id="loginMessage" class="message"></div>
             </form>
-            
+
             <!-- Signup Form -->
-            <form id="signupForm" class="form">
+            <form id="signupForm" class="auth-form">
                 <div class="form-group">
-                    <input type="text" id="signupUsername" placeholder="Username" required>
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" placeholder="Choose a username" required>
                 </div>
                 <div class="form-group">
-                    <input type="email" id="signupEmail" placeholder="Email" required>
+                    <label for="signupEmail">Email</label>
+                    <input type="email" id="signupEmail" placeholder="Enter your email" required>
                 </div>
                 <div class="form-group">
-                    <input type="password" id="signupPassword" placeholder="Password" required minlength="6">
+                    <label for="signupPassword">Password</label>
+                    <div class="password-input">
+                        <input type="password" id="signupPassword" placeholder="Create a password" required minlength="6">
+                        <button type="button" class="toggle-password" onclick="togglePassword('signupPassword')">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 5C5 5 2 10 2 10s3 5 8 5 8-5 8-5-3-5-8-5z" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <input type="password" id="signupPassword2" placeholder="Confirm Password" required minlength="6">
+                    <label for="signupPassword2">Confirm Password</label>
+                    <div class="password-input">
+                        <input type="password" id="signupPassword2" placeholder="Confirm your password" required minlength="6">
+                        <button type="button" class="toggle-password" onclick="togglePassword('signupPassword2')">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 5C5 5 2 10 2 10s3 5 8 5 8-5 8-5-3-5-8-5z" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Account</button>
+                <button type="submit" class="btn-primary btn-full">
+                    <span>Create Account</span>
+                    <div class="btn-loader"></div>
+                </button>
                 <div id="signupMessage" class="message"></div>
             </form>
         </div>
     </div>
-    
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
     <script src="js/auth.js"></script>
 </body>
 </html>

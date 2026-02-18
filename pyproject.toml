@@ -12,6 +12,7 @@ dependencies = [
     "llama-index-core>=0.14.0",
     "llama-index-readers-file>=0.5.4",
     "openai>=1.107.0",
+    "plotly>=6.5.2",
     "python-dotenv>=1.1.1",
     "qdrant-client>=1.15.1",
     "sentence-transformers>=5.2.0",

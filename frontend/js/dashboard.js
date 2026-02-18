@@ -354,3 +354,180 @@ document.getElementById('changePasswordForm').addEventListener('submit', async (
         msg.textContent = 'Error: ' + err.message;
     }
 });
+
+
+// ========== DATA ANALYSIS FUNCTIONS ==========
+
+let currentDataFile = null;
+
+// Upload data file
+async function uploadDataFile() {
+    const fileInput = document.getElementById('dataFile');
+    const msg = document.getElementById('dataUploadMessage');
+    
+    if (!fileInput.files.length) {
+        msg.className = 'message error';
+        msg.textContent = 'Please select a file';
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    msg.className = 'message';
+    msg.textContent = 'Uploading and analyzing...';
+    
+    try {
+        const res = await fetch(`${API_URL}/data/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            msg.className = 'message success';
+            msg.textContent = 'File analyzed successfully!';
+            currentDataFile = data.data.filename;
+            
+            // Show preview
+            displayDataPreview(data.data.preview);
+            
+            // Load insights and charts
+            loadDataInsights(currentDataFile);
+            loadDataCharts(currentDataFile);
+            
+            // Show query section
+            document.getElementById('dataQuery').style.display = 'block';
+        } else {
+            msg.className = 'message error';
+            msg.textContent = data.message;
+        }
+    } catch (err) {
+        msg.className = 'message error';
+        msg.textContent = 'Upload failed: ' + err.message;
+    }
+}
+
+// Display data preview
+function displayDataPreview(preview) {
+    const previewDiv = document.getElementById('dataPreview');
+    const tableDiv = document.getElementById('previewTable');
+    
+    if (!preview || preview.length === 0) return;
+    
+    // Create table
+    let html = '<table style="width:100%; border-collapse:collapse;">';
+    
+    // Header
+    html += '<thead><tr>';
+    Object.keys(preview[0]).forEach(key => {
+        html += `<th style="border:1px solid #ddd; padding:8px; background:#f5f5f5;">${key}</th>`;
+    });
+    html += '</tr></thead>';
+    
+    // Rows
+    html += '<tbody>';
+    preview.forEach(row => {
+        html += '<tr>';
+        Object.values(row).forEach(val => {
+            html += `<td style="border:1px solid #ddd; padding:8px;">${val}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    
+    tableDiv.innerHTML = html;
+    previewDiv.style.display = 'block';
+}
+
+// Load insights
+async function loadDataInsights(filename) {
+    try {
+        const res = await fetch(`${API_URL}/data/analysis/${filename}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            const insightsDiv = document.getElementById('insightsContent');
+            insightsDiv.innerHTML = `<p style="white-space:pre-wrap;">${data.data.llm_insights}</p>`;
+            document.getElementById('dataInsights').style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Failed to load insights:', err);
+    }
+}
+
+// Load charts
+async function loadDataCharts(filename) {
+    try {
+        const res = await fetch(`${API_URL}/data/charts/${filename}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success && data.data.charts.length > 0) {
+            const container = document.getElementById('chartsContainer');
+            container.innerHTML = '';
+            
+            data.data.charts.forEach((chart, idx) => {
+                const chartDiv = document.createElement('div');
+                chartDiv.id = `chart-${idx}`;
+                chartDiv.style.marginBottom = '20px';
+                container.appendChild(chartDiv);
+                
+                const plotlyData = JSON.parse(chart.data);
+                Plotly.newPlot(chartDiv.id, plotlyData.data, plotlyData.layout);
+            });
+            
+            document.getElementById('dataCharts').style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Failed to load charts:', err);
+    }
+}
+
+// Ask question about data
+async function askDataQuestion() {
+    const question = document.getElementById('dataQuestion').value.trim();
+    const answerDiv = document.getElementById('dataAnswer');
+    
+    if (!question) return;
+    if (!currentDataFile) {
+        answerDiv.className = 'message error';
+        answerDiv.textContent = 'Please upload a file first';
+        return;
+    }
+    
+    answerDiv.className = 'message';
+    answerDiv.textContent = 'Analyzing...';
+    
+    try {
+        const res = await fetch(`${API_URL}/data/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ filename: currentDataFile, question })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            answerDiv.className = 'message success';
+            answerDiv.textContent = data.data.answer;
+        } else {
+            answerDiv.className = 'message error';
+            answerDiv.textContent = data.message;
+        }
+    } catch (err) {
+        answerDiv.className = 'message error';
+        answerDiv.textContent = 'Query failed: ' + err.message;
+    }
+}

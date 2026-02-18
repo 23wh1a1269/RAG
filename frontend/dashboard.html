@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG PDF Chat - Dashboard</title>
+    <title>RAG Chat - Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -23,6 +23,7 @@
             <button class="tab" onclick="showSection('documents')">📄 Documents</button>
             <button class="tab" onclick="showSection('history')">🕒 History</button>
             <button class="tab" onclick="showSection('profile')">👤 Profile</button>
+            <button class="tab" onclick="showSection('data')">📊 Data Analysis</button>
         </div>
         
         <!-- Chat Section -->
@@ -119,8 +120,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Data Analysis Section -->
+        <div id="dataSection" class="section">
+            <div class="card">
+                <h3>📊 Upload Excel/CSV for Analysis</h3>
+                <input type="file" id="dataFile" accept=".xlsx,.xls,.csv" class="file-input">
+                <button class="btn btn-primary" onclick="uploadDataFile()">Upload & Analyze</button>
+                <div id="dataUploadMessage" class="message"></div>
+            </div>
+
+            <div id="dataPreview" class="card" style="display:none;">
+                <h3>Data Preview</h3>
+                <div id="previewTable"></div>
+            </div>
+
+            <div id="dataInsights" class="card" style="display:none;">
+                <h3>AI Insights</h3>
+                <div id="insightsContent"></div>
+            </div>
+
+            <div id="dataCharts" style="display:none;">
+                <h3>Visualizations</h3>
+                <div id="chartsContainer"></div>
+            </div>
+
+            <div id="dataQuery" class="card" style="display:none;">
+                <h3>Ask Questions About Your Data</h3>
+                <textarea id="dataQuestion" placeholder="e.g., What is the average sales?" rows="2"></textarea>
+                <button class="btn btn-primary" onclick="askDataQuestion()">Ask</button>
+                <div id="dataAnswer" class="message"></div>
+            </div>
+        </div>
     </div>
     
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>

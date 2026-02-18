@@ -1,10 +1,11 @@
 """Production FastAPI backend with JWT authentication."""
 import uuid
+import json
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from groq import Groq
 
@@ -15,6 +16,12 @@ from backend.rag.data_loader import load_and_chunk_pdf, embed_texts
 from backend.rag.vector_db import QdrantStorage
 from backend.rag.cache import get_cached, cache_response
 from backend.user.user_data import add_chat, get_chat_history, get_user_documents, delete_user_document
+
+# Data analysis imports
+from backend.data_analysis.excel_loader import load_excel_or_csv, get_column_info
+from backend.data_analysis.analysis import generate_statistics, detect_trends, find_insights
+from backend.data_analysis.visualization import generate_charts
+from backend.data_analysis.insights_llm import generate_llm_insights, answer_data_question
 
 app = FastAPI(title="RAG PDF Chat API", version="3.0")
 
@@ -59,6 +66,10 @@ class QueryRequest(BaseModel):
     question: str
     top_k: int = DEFAULT_TOP_K
     selected_documents: list[str] | None = None
+
+class DataQueryRequest(BaseModel):
+    filename: str
+    question: str
 
 # ========== AUTH ENDPOINTS ==========
 
@@ -400,6 +411,198 @@ async def query_endpoint(req: QueryRequest, username: str = Depends(verify_token
         import traceback
         traceback.print_exc()
         return {"success": False, "message": f"Query failed: {str(e)}"}
+
+
+# ========== DATA ANALYSIS ENDPOINTS ==========
+
+# Storage for analysis results (in production, use database)
+ANALYSIS_CACHE = {}
+
+@app.post("/data/upload")
+async def upload_data_file(file: UploadFile = File(...), username: str = Depends(verify_token)):
+    """Upload Excel or CSV file for analysis."""
+    try:
+        print(f"\n[DATA UPLOAD] User: {username}, File: {file.filename}")
+        
+        # Validate file type
+        allowed_extensions = ['.xlsx', '.xls', '.csv']
+        file_ext = Path(file.filename).suffix.lower()
+        if file_ext not in allowed_extensions:
+            return {"success": False, "message": f"Only {', '.join(allowed_extensions)} files allowed"}
+        
+        # Validate file size (10MB max)
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            return {"success": False, "message": "File size must be less than 10MB"}
+        
+        # Save file
+        data_path = Path(UPLOADS_DIR) / username / "data"
+        data_path.mkdir(parents=True, exist_ok=True)
+        file_path = data_path / file.filename
+        
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        print(f"[DATA UPLOAD] Saved to: {file_path}")
+        
+        # Load and analyze
+        result = load_excel_or_csv(str(file_path))
+        
+        if not result['success']:
+            return {"success": False, "message": result['error']}
+        
+        df = result['dataframe']
+        metadata = result['metadata']
+        
+        # Generate statistics
+        stats = generate_statistics(df)
+        trends = detect_trends(df)
+        insights = find_insights(df, stats)
+        
+        # Generate charts
+        charts = generate_charts(df)
+        
+        # Generate LLM insights
+        llm_insights = generate_llm_insights(stats, GROQ_API_KEY, GROQ_MODEL)
+        
+        # Get column info
+        column_info = get_column_info(df)
+        
+        # Cache results
+        cache_key = f"{username}_{file.filename}"
+        ANALYSIS_CACHE[cache_key] = {
+            'metadata': metadata,
+            'stats': stats,
+            'trends': trends,
+            'insights': insights,
+            'charts': charts,
+            'llm_insights': llm_insights,
+            'column_info': column_info,
+            'df_info': {
+                'columns': df.columns.tolist(),
+                'dtypes': {col: str(dtype) for col, dtype in df.dtypes.items()}
+            }
+        }
+        
+        print(f"[DATA UPLOAD] Analysis complete: {len(charts)} charts generated")
+        
+        return {
+            "success": True,
+            "message": "File uploaded and analyzed successfully",
+            "data": {
+                "filename": file.filename,
+                "metadata": metadata,
+                "column_info": column_info,
+                "preview": metadata['preview']
+            }
+        }
+        
+    except Exception as e:
+        print(f"[DATA UPLOAD ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "message": f"Upload failed: {str(e)}"}
+
+@app.get("/data/analysis/{filename}")
+async def get_data_analysis(filename: str, username: str = Depends(verify_token)):
+    """Get full analysis results for a file."""
+    try:
+        cache_key = f"{username}_{filename}"
+        
+        if cache_key not in ANALYSIS_CACHE:
+            return {"success": False, "message": "Analysis not found. Please upload the file first."}
+        
+        cached = ANALYSIS_CACHE[cache_key]
+        
+        return {
+            "success": True,
+            "data": {
+                "stats": cached['stats'],
+                "trends": cached['trends'],
+                "insights": cached['insights'],
+                "llm_insights": cached['llm_insights'],
+                "column_info": cached['column_info']
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": f"Failed to retrieve analysis: {str(e)}"}
+
+@app.get("/data/charts/{filename}")
+async def get_data_charts(filename: str, username: str = Depends(verify_token)):
+    """Get visualization charts for a file."""
+    try:
+        cache_key = f"{username}_{filename}"
+        
+        if cache_key not in ANALYSIS_CACHE:
+            return {"success": False, "message": "Charts not found. Please upload the file first."}
+        
+        charts = ANALYSIS_CACHE[cache_key]['charts']
+        
+        return {
+            "success": True,
+            "data": {
+                "charts": charts,
+                "count": len(charts)
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": f"Failed to retrieve charts: {str(e)}"}
+
+@app.post("/data/query")
+async def query_data(req: DataQueryRequest, username: str = Depends(verify_token)):
+    """Answer questions about uploaded data."""
+    try:
+        cache_key = f"{username}_{req.filename}"
+        
+        if cache_key not in ANALYSIS_CACHE:
+            return {"success": False, "message": "Data not found. Please upload the file first."}
+        
+        cached = ANALYSIS_CACHE[cache_key]
+        
+        # Answer question using LLM with grounded statistics
+        answer = answer_data_question(
+            req.question,
+            cached['stats'],
+            cached['df_info'],
+            GROQ_API_KEY,
+            GROQ_MODEL
+        )
+        
+        return {
+            "success": True,
+            "data": {
+                "question": req.question,
+                "answer": answer,
+                "mode": "data_analysis"
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": f"Query failed: {str(e)}"}
+
+@app.get("/data/files")
+async def list_data_files(username: str = Depends(verify_token)):
+    """List all uploaded data files for user."""
+    try:
+        data_path = Path(UPLOADS_DIR) / username / "data"
+        if not data_path.exists():
+            return {"success": True, "data": {"files": []}}
+        
+        files = []
+        for file in data_path.glob("*"):
+            if file.suffix.lower() in ['.xlsx', '.xls', '.csv']:
+                files.append({
+                    "name": file.name,
+                    "size": file.stat().st_size,
+                    "modified": file.stat().st_mtime
+                })
+        
+        return {"success": True, "data": {"files": files}}
+        
+    except Exception as e:
+        return {"success": False, "message": f"Failed to list files: {str(e)}"}
 
 
 # ========== FRONTEND ROUTES ==========
