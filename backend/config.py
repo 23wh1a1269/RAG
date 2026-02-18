@@ -1,4 +1,4 @@
-"""Configuration management for RAG application."""
+"""Production configuration management."""
 import os
 from dotenv import load_dotenv
 
@@ -6,13 +6,18 @@ load_dotenv()
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODELS = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# JWT
+JWT_SECRET = os.getenv("JWT_SECRET", "change-this-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_HOURS = 24
 
 # Database
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 USERS_DB_FILE = "users.json"
 
-# Email (Optional)
+# Email
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
@@ -21,15 +26,16 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 # Paths
 UPLOADS_DIR = "uploads"
 CHAT_HISTORY_DIR = "chat_history"
+CACHE_DIR = "cache"
 
-# RAG Parameters (Optimized)
+# RAG Parameters
 DEFAULT_QUERY_QUOTA = 50
-DEFAULT_TOP_K = 3  # Reduced for better precision
+DEFAULT_TOP_K = 3
 EMBEDDING_DIM = 384
 COLLECTION_NAME = "docs"
-CHUNK_SIZE = 512  # Smaller chunks for better retrieval
-CHUNK_OVERLAP = 50  # Reduced overlap
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 50
+SCORE_THRESHOLD = 0.4
 
-# Frontend
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8501"]
+# CORS
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
