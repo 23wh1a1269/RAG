@@ -34,6 +34,8 @@ app.add_middleware(
 )
 
 # Mount static files (CSS, JS)
+app.mount("/css", StaticFiles(directory="frontend/css"), name="css")
+app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # ========== MODELS ==========
@@ -609,8 +611,8 @@ async def list_data_files(username: str = Depends(verify_token)):
 
 @app.get("/")
 async def root():
-    """Serve login page."""
-    return FileResponse("frontend/index.html")
+    """Serve landing page."""
+    return FileResponse("frontend/landing.html")
 
 @app.get("/dashboard")
 async def dashboard():
